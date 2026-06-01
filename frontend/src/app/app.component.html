@@ -1,0 +1,104 @@
+<div class="container">
+
+  <!-- ── UPLOAD SCREEN ── -->
+  <div *ngIf="screen === 'upload'" class="card">
+    <div class="header">
+      <div class="logo">🤖</div>
+      <h1>AI Interview System</h1>
+      <p>Upload your resume and get a personalized technical interview</p>
+    </div>
+
+    <div class="form-group">
+      <label>Target Role</label>
+      <select [(ngModel)]="selectedRole">
+        <option *ngFor="let role of roles" [value]="role">{{ role }}</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Resume</label>
+      <div class="file-upload-area">
+        <input type="file" accept=".pdf" (change)="onFileSelected($event)" />
+        <div class="upload-icon">📄</div>
+        <div class="upload-text">Click to upload your resume</div>
+        <div class="upload-hint">PDF files only</div>
+      </div>
+      <div *ngIf="selectedFile" class="file-selected">
+        <span>✅ {{ selectedFile.name }}</span>
+      </div>
+    </div>
+
+    <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+    <button (click)="startInterview()" [disabled]="isLoading" class="btn-primary">
+      <span *ngIf="isLoading"><span class="loading-spinner"></span>Generating questions...</span>
+      <span *ngIf="!isLoading">Start Interview →</span>
+    </button>
+  </div>
+
+  <!-- ── INTERVIEW SCREEN ── -->
+  <div *ngIf="screen === 'interview'" class="card">
+    <div class="progress-header">
+      <span class="progress-label">Interview in progress</span>
+      <span class="progress-count">{{ questionNumber }} / {{ totalQuestions }}</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" [style.width.%]="(questionNumber / totalQuestions) * 100"></div>
+    </div>
+
+    <div class="question-box">
+      <div class="question-tag">Question {{ questionNumber }}</div>
+      <div class="question-text">{{ currentQuestion }}</div>
+    </div>
+
+    <div class="form-group">
+      <label>Your Answer</label>
+      <textarea
+        [(ngModel)]="currentAnswer"
+        rows="6"
+        placeholder="Type your answer here...">
+      </textarea>
+    </div>
+
+    <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+    <button (click)="submitAnswer()" [disabled]="isLoading" class="btn-primary">
+      <span *ngIf="isLoading"><span class="loading-spinner"></span>Submitting...</span>
+      <span *ngIf="!isLoading && questionNumber < totalQuestions">Next Question →</span>
+      <span *ngIf="!isLoading && questionNumber === totalQuestions">Finish Interview ✓</span>
+    </button>
+  </div>
+
+  <!-- ── SUMMARY SCREEN ── -->
+  <div *ngIf="screen === 'summary'" class="card">
+    <div class="summary-header">
+      <div class="summary-icon">🎉</div>
+      <h2>Interview Complete!</h2>
+      <p>Role: <strong>{{ summary?.role }}</strong></p>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-number">{{ summary?.total_questions }}</div>
+        <div class="stat-label">Questions Asked</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ summary?.total_answered }}</div>
+        <div class="stat-label">Answered</div>
+      </div>
+    </div>
+
+    <div class="qa-list">
+      <div *ngFor="let qa of summary?.qa_pairs; let i = index" class="qa-item">
+        <div class="question-label">
+          <span class="q-badge">Q{{ i + 1 }}</span>
+          <span>{{ qa.question }}</span>
+        </div>
+        <div class="answer-label">{{ qa.answer }}</div>
+      </div>
+    </div>
+
+    <button (click)="restart()" class="btn-secondary">Start New Interview</button>
+  </div>
+
+</div>
