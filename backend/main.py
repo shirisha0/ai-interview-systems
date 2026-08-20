@@ -4,7 +4,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 import pdfplumber
 import uuid
 from dotenv import load_dotenv
@@ -12,9 +15,30 @@ from backend.rag.question_generator import generate_questions
 
 load_dotenv()
 
-app = FastAPI(title="AI Interview System")
+# ─────────────────────────────────────────────
+# Auto ingest books on startup
+# ─────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if not os.path.exists(os.getenv("CHROMA_DB_PATH", "./chroma_db")):
+        print("ChromaDB not found — running ingestion...")
+        from backend.rag.ingest import load_documents, chunk_documents, store_in_vectordb
+        docs = load_documents("./data")
+        if docs:
+            chunks = chunk_documents(docs)
+            store_in_vectordb(chunks)
+            print("Ingestion complete!")
+        else:
+            print("No books found in /data folder!")
+    else:
+        print("ChromaDB already exists — skipping ingestion.")
+    yield
 
-# Allow frontend to talk to backend
+app = FastAPI(title="AI Interview System", lifespan=lifespan)
+
+# ─────────────────────────────────────────────
+# CORS
+# ─────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,30 +49,26 @@ app.add_middleware(
 # In-memory session storage
 sessions = {}
 
-
 class AnswerRequest(BaseModel):
     session_id: str
     question: str
     answer: str
 
-
 # ─────────────────────────────────────────────
 # ROUTE 1 — Health check
 # ─────────────────────────────────────────────
-@app.get("/")
+@app.get("/health")
 def root():
     return {"status": "AI Interview System is running!"}
 
-
 # ─────────────────────────────────────────────
-# ROUTE 2 — Upload resume and start interview
+# ROUTE 2 — Start interview
 # ─────────────────────────────────────────────
 @app.post("/start-interview")
 async def start_interview(
     file: UploadFile = File(...),
     role: str = Form(...)
 ):
-    # Extract text from uploaded resume PDF
     contents = await file.read()
     with open("temp_resume.pdf", "wb") as f:
         f.write(contents)
@@ -61,14 +81,12 @@ async def start_interview(
     if not resume_text.strip():
         return {"error": "Could not extract text from resume."}
 
-    # Generate questions using RAG pipeline
     questions = generate_questions(
         resume_text=resume_text,
         role=role,
         num_questions=5
     )
 
-    # Create a session
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
         "role": role,
@@ -85,9 +103,8 @@ async def start_interview(
         "total_questions": len(questions)
     }
 
-
 # ─────────────────────────────────────────────
-# ROUTE 3 — Submit answer, get next question
+# ROUTE 3 — Submit answer
 # ─────────────────────────────────────────────
 @app.post("/submit-answer")
 def submit_answer(request: AnswerRequest):
@@ -95,7 +112,6 @@ def submit_answer(request: AnswerRequest):
     if not session:
         return {"error": "Session not found."}
 
-    # Save the answer
     session["answers"].append({
         "question": request.question,
         "answer": request.answer
@@ -119,9 +135,8 @@ def submit_answer(request: AnswerRequest):
         "total_questions": len(questions)
     }
 
-
 # ─────────────────────────────────────────────
-# ROUTE 4 — Get final summary
+# ROUTE 4 — Get summary
 # ─────────────────────────────────────────────
 @app.get("/summary/{session_id}")
 def get_summary(session_id: str):
@@ -135,3 +150,17 @@ def get_summary(session_id: str):
         "total_answered": len(session["answers"]),
         "qa_pairs": session["answers"]
     }
+
+# ─────────────────────────────────────────────
+# Serve Angular Frontend — must be last!
+# ─────────────────────────────────────────────
+frontend_path = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "frontend",
+    "dist",
+    "frontend"
+)
+
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
