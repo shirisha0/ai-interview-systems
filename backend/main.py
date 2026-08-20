@@ -5,6 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import pdfplumber
@@ -56,7 +57,7 @@ class AnswerRequest(BaseModel):
 # ─────────────────────────────────────────────
 # ROUTE 1 — Health check
 # ─────────────────────────────────────────────
-@app.get("/")
+@app.get("/health")
 def root():
     return {"status": "AI Interview System is running!"}
 
@@ -149,3 +150,17 @@ def get_summary(session_id: str):
         "total_answered": len(session["answers"]),
         "qa_pairs": session["answers"]
     }
+
+# ─────────────────────────────────────────────
+# Serve Angular Frontend — must be last!
+# ─────────────────────────────────────────────
+frontend_path = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "frontend",
+    "dist",
+    "frontend"
+)
+
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
