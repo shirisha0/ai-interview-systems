@@ -6,7 +6,7 @@ import { Observable } from 'rxjs';
   providedIn: 'root'
 })
 export class InterviewService {
-  private apiUrl = 'http://localhost:8000';
+  private apiUrl = 'https://your-railway-url.up.railway.app';
 
   constructor(private http: HttpClient) {}
 
